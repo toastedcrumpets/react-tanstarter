@@ -22,3 +22,7 @@ dist
 /public/build
 
 .tanstack
+
+# Temporary files
+pgdata
+db.log
