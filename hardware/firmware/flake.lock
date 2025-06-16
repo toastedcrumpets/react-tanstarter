@@ -19,6 +19,24 @@
         "type": "github"
       }
     },
+    "esp-qemu": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_2"
+      },
+      "locked": {
+        "lastModified": 1747734923,
+        "narHash": "sha256-2/UQ1qKRRalPjCXC8HFVkT9XSbd6k/KfC6pu4W51+Ek=",
+        "owner": "SFrijters",
+        "repo": "nix-qemu-espressif",
+        "rev": "9974f1d08cc38ca19787568c978c6dcdaea86e27",
+        "type": "github"
+      },
+      "original": {
+        "owner": "SFrijters",
+        "repo": "nix-qemu-espressif",
+        "type": "github"
+      }
+    },
     "flake-utils": {
       "inputs": {
         "systems": "systems"
@@ -72,6 +90,21 @@
     },
     "nixpkgs_2": {
       "locked": {
+        "lastModified": 1747733058,
+        "narHash": "sha256-8Zrr8Qo7K7IbU9O4/n+dGQXf4X3g4X/77anrt1L2XEk=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "8d4a156eb1809989fe0613d68bd37a85dcc54bf4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_3": {
+      "locked": {
         "lastModified": 1749903597,
         "narHash": "sha256-jp0D4vzBcRKwNZwfY4BcWHemLGUs4JrS3X9w5k/JYDA=",
         "owner": "nixos",
@@ -89,8 +122,9 @@
     "root": {
       "inputs": {
         "esp-idf": "esp-idf",
+        "esp-qemu": "esp-qemu",
         "flake-utils": "flake-utils_2",
-        "nixpkgs": "nixpkgs_2"
+        "nixpkgs": "nixpkgs_3"
       }
     },
     "systems": {
