@@ -15,19 +15,43 @@
             esp-idf.overlays.default
             esp-qemu.overlays.default
           ];
+          config.allowUnfree = true;
         };
 
       in
       with pkgs;
       {
         formatter = nixpkgs.legacyPackages.x86_64-linux.nixpkgs-fmt;
+        
         devShells.default = mkShell {
           buildInputs = [
+            # Shell
             bashInteractive
+
+            # Full ESP-IDF development environment
             esp-idf-full
+
+            (vscode-with-extensions.override {
+              vscodeExtensions = with vscode-extensions; [
+              tuttieee.emacs-mcx
+              bbenoist.nix
+              ms-python.python
+	            ms-vscode.cpptools
+        	    ms-vscode.cpptools-extension-pack
+              ms-vscode.cmake-tools
+              ] ++ pkgs.vscode-utils.extensionsFromVscodeMarketplace [
+                {
+                  name = "esp-idf-extension";
+                  publisher = "espressif";
+                  version = "1.10.0";
+                  sha256 = "tTh25AHg8msKtrNXfn39aHT8bqWy84lfd+Aal6ip4Oc=";
+                }];
+            })
+            
+            # QEMU for ESP32 
             (qemu-esp32.override {
-              sdlSupport = true;
-              gtkSupport = true;
+              sdlSupport = true; # Needed for screen output
+              gtkSupport = true; # Alternative to SDL
             })
           ];
         };
