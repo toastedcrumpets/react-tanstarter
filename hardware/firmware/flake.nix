@@ -25,7 +25,10 @@
           buildInputs = [
             bashInteractive
             esp-idf-full
-            qemu-esp32
+            (qemu-esp32.override {
+              sdlSupport = true;
+              gtkSupport = true;
+            })
           ];
         };
       }
