@@ -20,6 +20,8 @@
 #include "esp_log.h"
 #include "lvgl.h"
 
+#define CONFIG_EXAMPLE_LCD_CONTROLLER_GC9A01 true
+
 #if CONFIG_EXAMPLE_LCD_CONTROLLER_ILI9341
 #include "esp_lcd_ili9341.h"
 #elif CONFIG_EXAMPLE_LCD_CONTROLLER_GC9A01
@@ -89,7 +91,7 @@ static bool example_notify_lvgl_flush_ready(esp_lcd_panel_io_handle_t panel_io, 
 /* Rotate display and touch, when rotated screen in LVGL. Called when driver parameters are updated. */
 static void example_lvgl_port_update_callback(lv_display_t *disp)
 {
-    esp_lcd_panel_handle_t panel_handle = lv_display_get_user_data(disp);
+    esp_lcd_panel_handle_t panel_handle = (esp_lcd_panel_handle_t)(lv_display_get_user_data(disp));
     lv_display_rotation_t rotation = lv_display_get_rotation(disp);
 
     switch (rotation) {
@@ -119,7 +121,7 @@ static void example_lvgl_port_update_callback(lv_display_t *disp)
 static void example_lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
 {
     example_lvgl_port_update_callback(disp);
-    esp_lcd_panel_handle_t panel_handle = lv_display_get_user_data(disp);
+    esp_lcd_panel_handle_t panel_handle = (esp_lcd_panel_handle_t)lv_display_get_user_data(disp);
     int offsetx1 = area->x1;
     int offsetx2 = area->x2;
     int offsety1 = area->y1;
@@ -174,14 +176,14 @@ static void example_lvgl_port_task(void *arg)
     }
 }
 
-void app_main(void)
+extern "C" void app_main()
 {
 
     ESP_LOGI(TAG, "Initialize SPI bus");
     spi_bus_config_t buscfg = {
-        .sclk_io_num = EXAMPLE_PIN_NUM_SCLK,
         .mosi_io_num = EXAMPLE_PIN_NUM_MOSI,
         .miso_io_num = EXAMPLE_PIN_NUM_MISO,
+        .sclk_io_num = EXAMPLE_PIN_NUM_SCLK,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
         .max_transfer_sz = EXAMPLE_LCD_H_RES * 80 * sizeof(uint16_t),
@@ -191,13 +193,13 @@ void app_main(void)
     ESP_LOGI(TAG, "Install panel IO");
     esp_lcd_panel_io_handle_t io_handle = NULL;
     esp_lcd_panel_io_spi_config_t io_config = {
-        .dc_gpio_num = EXAMPLE_PIN_NUM_LCD_DC,
         .cs_gpio_num = EXAMPLE_PIN_NUM_LCD_CS,
+        .dc_gpio_num = EXAMPLE_PIN_NUM_LCD_DC,
+        .spi_mode = 0,
         .pclk_hz = EXAMPLE_LCD_PIXEL_CLOCK_HZ,
+        .trans_queue_depth = 10,
         .lcd_cmd_bits = EXAMPLE_LCD_CMD_BITS,
         .lcd_param_bits = EXAMPLE_LCD_PARAM_BITS,
-        .spi_mode = 0,
-        .trans_queue_depth = 10,
     };
     // Attach the LCD to the SPI bus
     ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)LCD_HOST, &io_config, &io_handle));
