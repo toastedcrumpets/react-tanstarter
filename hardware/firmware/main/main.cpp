@@ -12,8 +12,12 @@
 #include "esp_timer.h"
 #include "esp_err.h"
 #include "esp_lcd_gc9a01.h"
+
 #include "unistd.h"
 #include "lvgl.h"
+
+// Code is built upon this example, allowing touch later
+// https://github.com/espressif/esp-idf/blob/master/examples/peripherals/lcd/spi_lcd_touch/
 
 #define LCD_HOST               SPI2_HOST
 #define TEST_LCD_H_RES              (240)
@@ -37,20 +41,9 @@
 #define EXAMPLE_LVGL_DRAW_BUF_LINES    20 // number of display lines in each draw buffer
 
 static const char *TAG = "gc9a01_test";
-static SemaphoreHandle_t refresh_finish = NULL;
-
-IRAM_ATTR static bool test_notify_refresh_ready(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_event_data_t *edata, void *user_ctx)
-{
-    BaseType_t need_yield = pdFALSE;
-
-    xSemaphoreGiveFromISR(refresh_finish, &need_yield);
-    return (need_yield == pdTRUE);
-}
 
 #define TEST_ASSERT_NOT_NULL(a) assert(a != NULL)
 #define TEST_ESP_OK(a) assert(a == ESP_OK)
-
-
 
 static lv_obj_t * btn;
 static lv_display_rotation_t rotation = LV_DISP_ROTATION_0;
@@ -97,29 +90,6 @@ void example_lvgl_demo_ui(lv_display_t *disp)
     lv_anim_set_repeat_delay(&a, 500);
     lv_anim_set_values(&a, 0, 100);
     lv_anim_start(&a);
-}
-
-static void test_draw_bitmap(esp_lcd_panel_handle_t panel_handle)
-{
-    refresh_finish = xSemaphoreCreateBinary();
-    TEST_ASSERT_NOT_NULL(refresh_finish);
-
-    uint16_t row_line = TEST_LCD_V_RES / TEST_LCD_BIT_PER_PIXEL;
-    uint8_t byte_per_pixel = TEST_LCD_BIT_PER_PIXEL / 8;
-    uint8_t *color = (uint8_t *)heap_caps_calloc(1, row_line * TEST_LCD_H_RES * byte_per_pixel, MALLOC_CAP_DMA);
-    TEST_ASSERT_NOT_NULL(color);
-
-    for (int j = 0; j < TEST_LCD_BIT_PER_PIXEL; j++) {
-        for (int i = 0; i < row_line * TEST_LCD_H_RES; i++) {
-            for (int k = 0; k < byte_per_pixel; k++) {
-                color[i * byte_per_pixel + k] = (SPI_SWAP_DATA_TX(BIT(j), TEST_LCD_BIT_PER_PIXEL) >> (k * 8)) & 0xff;
-            }
-        }
-        TEST_ESP_OK(esp_lcd_panel_draw_bitmap(panel_handle, 0, j * row_line, TEST_LCD_H_RES, (j + 1) * row_line, color));
-        xSemaphoreTake(refresh_finish, portMAX_DELAY);
-    }
-    free(color);
-    vSemaphoreDelete(refresh_finish);
 }
 
 static void example_increase_lvgl_tick(void *arg)
@@ -180,9 +150,10 @@ void test_spi()
       .data5_io_num = -1,                                     
       .data6_io_num = -1,                                     
       .data7_io_num = -1,
+      .data_io_default_level = 0,
       .max_transfer_sz = TEST_LCD_H_RES * 80 * TEST_LCD_BIT_PER_PIXEL / 8,
       .flags = 0,
-      .isr_cpu_id = INTR_CPU_ID_AUTO,
+      .isr_cpu_id = ESP_INTR_CPU_AFFINITY_AUTO,
       .intr_flags = 0
     };
     
@@ -190,8 +161,22 @@ void test_spi()
 
     ESP_LOGI(TAG, "Install panel IO");
     esp_lcd_panel_io_handle_t io_handle = NULL;
-    const esp_lcd_panel_io_spi_config_t io_config = GC9A01_PANEL_IO_SPI_CONFIG(TEST_PIN_NUM_LCD_CS, TEST_PIN_NUM_LCD_DC,
-            test_notify_refresh_ready, NULL);
+    const esp_lcd_panel_io_spi_config_t io_config =     {                                                               \
+        .cs_gpio_num = TEST_PIN_NUM_LCD_CS,                                          
+        .dc_gpio_num = TEST_PIN_NUM_LCD_DC,                                          
+        .spi_mode = 0,                                              
+        .pclk_hz = 80 * 1000 * 1000,                                
+        .trans_queue_depth = 10,                                    
+        .on_color_trans_done = NULL,                            
+        .user_ctx = NULL,                                   
+        .lcd_cmd_bits = 8,                                          
+        .lcd_param_bits = 8,                                        
+    .cs_ena_pretrans = 0,        /*!< Amount of SPI bit-cycles the cs should be activated before the transmission (0-16) */
+    .cs_ena_posttrans = 0,       /*!< Amount of SPI bit-cycles the cs should stay active after the transmission (0-16) */
+        .flags = {}                                                 
+    };
+
+
     // Attach the LCD to the SPI bus
     TEST_ESP_OK(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)LCD_HOST, &io_config, &io_handle));
 
@@ -200,7 +185,10 @@ void test_spi()
     const esp_lcd_panel_dev_config_t panel_config = {
         .reset_gpio_num = TEST_PIN_NUM_LCD_RST,
         .rgb_endian = LCD_RGB_ENDIAN_BGR,
+        .data_endian = LCD_RGB_DATA_ENDIAN_BIG,
         .bits_per_pixel = TEST_LCD_BIT_PER_PIXEL,
+        .flags = {},
+        .vendor_config = nullptr,
     };
     TEST_ESP_OK(esp_lcd_new_panel_gc9a01(io_handle, &panel_config, &panel_handle));
     TEST_ESP_OK(esp_lcd_panel_reset(panel_handle));
@@ -233,8 +221,12 @@ void test_spi()
     // Tick interface for LVGL (using esp_timer to generate 2ms periodic event)
     const esp_timer_create_args_t lvgl_tick_timer_args = {
         .callback = &example_increase_lvgl_tick,
-        .name = "lvgl_tick"
+        .arg = nullptr,
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "lvgl_tick",
+        .skip_unhandled_events = false,
     };
+
     esp_timer_handle_t lvgl_tick_timer = NULL;
     ESP_ERROR_CHECK(esp_timer_create(&lvgl_tick_timer_args, &lvgl_tick_timer));
     ESP_ERROR_CHECK(esp_timer_start_periodic(lvgl_tick_timer, EXAMPLE_LVGL_TICK_PERIOD_MS * 1000));
@@ -253,9 +245,6 @@ void test_spi()
     _lock_acquire(&lvgl_api_lock);
     example_lvgl_demo_ui(display);
     _lock_release(&lvgl_api_lock);
-
-    //test_draw_bitmap(panel_handle);
-    //vTaskDelay(pdMS_TO_TICKS(TEST_DELAY_TIME_MS));
 
     //TEST_ESP_OK(esp_lcd_panel_del(panel_handle));
     //TEST_ESP_OK(esp_lcd_panel_io_del(io_handle));
