@@ -50,6 +50,55 @@ IRAM_ATTR static bool test_notify_refresh_ready(esp_lcd_panel_io_handle_t panel_
 #define TEST_ASSERT_NOT_NULL(a) assert(a != NULL)
 #define TEST_ESP_OK(a) assert(a == ESP_OK)
 
+
+
+static lv_obj_t * btn;
+static lv_display_rotation_t rotation = LV_DISP_ROTATION_0;
+
+static void btn_cb(lv_event_t * e)
+{
+//    lv_display_t *disp = lv_event_get_user_data(e);
+//    rotation++;
+//    if (rotation > LV_DISP_ROTATION_270) {
+//        rotation = LV_DISP_ROTATION_0;
+//    }
+//    lv_disp_set_rotation(disp, rotation);
+}
+static void set_angle(void * obj, int32_t v)
+{
+    lv_arc_set_value((lv_obj_t*)obj, v);
+}
+
+void example_lvgl_demo_ui(lv_display_t *disp)
+{
+    lv_obj_t *scr = lv_display_get_screen_active(disp);
+
+    btn = lv_button_create(scr);
+    lv_obj_t * lbl = lv_label_create(btn);
+    lv_label_set_text_static(lbl, LV_SYMBOL_REFRESH" ROTATE");
+    lv_obj_align(btn, LV_ALIGN_BOTTOM_LEFT, 30, -30);
+    /*Button event*/
+    lv_obj_add_event_cb(btn, btn_cb, LV_EVENT_CLICKED, disp);
+
+    /*Create an Arc*/
+    lv_obj_t * arc = lv_arc_create(scr);
+    lv_arc_set_rotation(arc, 270);
+    lv_arc_set_bg_angles(arc, 0, 360);
+    lv_obj_remove_style(arc, NULL, LV_PART_KNOB);   /*Be sure the knob is not displayed*/
+    lv_obj_remove_flag(arc, LV_OBJ_FLAG_CLICKABLE);  /*To not allow adjusting by click*/
+    lv_obj_center(arc);
+
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, arc);
+    lv_anim_set_exec_cb(&a, set_angle);
+    lv_anim_set_duration(&a, 1000);
+    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);    /*Just for the demo*/
+    lv_anim_set_repeat_delay(&a, 500);
+    lv_anim_set_values(&a, 0, 100);
+    lv_anim_start(&a);
+}
+
 static void test_draw_bitmap(esp_lcd_panel_handle_t panel_handle)
 {
     refresh_finish = xSemaphoreCreateBinary();
@@ -200,12 +249,17 @@ void test_spi()
     ESP_LOGI(TAG, "Create LVGL task");
     xTaskCreate(example_lvgl_port_task, "LVGL", EXAMPLE_LVGL_TASK_STACK_SIZE, NULL, EXAMPLE_LVGL_TASK_PRIORITY, NULL);
 
-    test_draw_bitmap(panel_handle);
-    vTaskDelay(pdMS_TO_TICKS(TEST_DELAY_TIME_MS));
 
-    TEST_ESP_OK(esp_lcd_panel_del(panel_handle));
-    TEST_ESP_OK(esp_lcd_panel_io_del(io_handle));
-    TEST_ESP_OK(spi_bus_free(LCD_HOST));
+    _lock_acquire(&lvgl_api_lock);
+    example_lvgl_demo_ui(display);
+    _lock_release(&lvgl_api_lock);
+
+    //test_draw_bitmap(panel_handle);
+    //vTaskDelay(pdMS_TO_TICKS(TEST_DELAY_TIME_MS));
+
+    //TEST_ESP_OK(esp_lcd_panel_del(panel_handle));
+    //TEST_ESP_OK(esp_lcd_panel_io_del(io_handle));
+    //TEST_ESP_OK(spi_bus_free(LCD_HOST));
 }
 
 extern "C" void app_main()
